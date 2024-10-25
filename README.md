@@ -1,3 +1,4 @@
 Beli for music
 
-Run using expo go
+Mac: Run using expo go; windows: run using npx expo start
+
