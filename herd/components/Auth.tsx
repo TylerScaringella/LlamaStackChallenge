@@ -1,7 +1,10 @@
 import React, { useState } from 'react'
-import { Alert, StyleSheet, View, AppState } from 'react-native'
+import { Alert, StyleSheet, View, AppState, Text, Platform } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Input } from '@rneui/themed'
+
+import { useFonts } from 'expo-font';
+import { Italiana_400Regular } from '@expo-google-fonts/italiana';
 
 // Tells Supabase Auth to continuously refresh the session automatically if
 // the app is in the foreground. When this is added, you will continue to receive
@@ -46,9 +49,15 @@ export default function Auth() {
     setLoading(false)
   }
   //auth deep linking is required
+  const [fontsLoaded] = useFonts({
+    Italiana_400Regular,
+  });
 
   return (
     <View style={styles.container}>
+      <Text style={{ fontFamily: 'Italiana_400Regular', fontSize: 24 }}>
+        Welcome to the Auth Screen
+      </Text>
       <View style={[styles.verticallySpaced, styles.mt20]}>
         <Input
           label="Email"

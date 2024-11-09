@@ -7,23 +7,28 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
+      "image": "./assets/splash2.png",
+      "resizeMode": "cover"
+    },
+    "plugins": [
+      "expo-font"
+    ]
+  },
+  "ios": {
+    "supportsTablet": true,
+    "bundleIdentifier": "com.anonymous.herd"
+  },
+  "android": {
+    "adaptiveIcon": {
+      "foregroundImage": "./assets/adaptive-icon.png",
       "backgroundColor": "#ffffff"
     },
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.herd"
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "package": "com.anonymous.herd"
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
-  }
+    "package": "com.anonymous.herd"
+  },
+  "web": {
+    "favicon": "./assets/favicon.png"
+  },
+  "plugins": [
+    "expo-font"
+  ]
 }
