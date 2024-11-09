@@ -20,9 +20,13 @@ import Friends from './components/Friends';
 import Account from './components/Account';
 import Search from './components/Search';
 import Home from './components/Home';
+import GutCheck from './components/GutCheck';
+import BinPage from './components/BinPage';
 
 import Song from './components/Song';
 import TinderPage from './components/TinderPage';
+import RankResult from './components/RankResult';
+import Daily5 from './components/Daily5';
 
 const Stack = createStackNavigator();
 
@@ -68,7 +72,7 @@ export default function App() {
 
   return (
     <NavigationContainer>
-      <Stack.Navigator initialRouteName="Initial">
+      <Stack.Navigator initialRouteName="Daily5">
         <Stack.Screen name="Initial" component={WelcomePage} options={{ headerShown: false }} />
         <Stack.Screen name="LogIn" component={LogIn} options={{ headerShown: false }} />
         <Stack.Screen name="UsernamePage" component={UsernamePage} options={{ headerShown: false }} />
@@ -81,6 +85,10 @@ export default function App() {
         <Stack.Screen name="Home" component={Home} options={{ headerShown: false }} />
         <Stack.Screen name="Song" component={Song} options={{ headerShown: false }} />
         <Stack.Screen name="TinderPage" component={TinderPage} options={{ headerShown: false }} />
+        <Stack.Screen name="RankResult" component={RankResult} options={{ headerShown: false }} />
+        <Stack.Screen name="GutCheck" component={GutCheck} options={{ headerShown: false }} />
+        <Stack.Screen name="BinPage" component={BinPage} options={{ headerShown: false }} />
+        <Stack.Screen name="Daily5" component={Daily5} options={{ headerShown: false }} />
 
         <Stack.Screen
           name="Account"

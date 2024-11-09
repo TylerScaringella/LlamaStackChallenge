@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect} from 'react';
 import { Text, Image, TouchableOpacity, Animated, PanResponder, Dimensions, Easing } from 'react-native';
 import { Button, Input } from '@rneui/themed';
 import styled from 'styled-components/native';
@@ -11,6 +11,11 @@ import { Container } from './Elements';
 import { faUndo } from '@fortawesome/free-solid-svg-icons';
 import { faRedo } from '@fortawesome/free-solid-svg-icons';
 import { faArrowLeft } from '@fortawesome/free-solid-svg-icons';
+import { faBook } from '@fortawesome/free-solid-svg-icons';
+import { faPencil } from '@fortawesome/free-solid-svg-icons';
+import { faCalendar } from '@fortawesome/free-solid-svg-icons';
+import { faPerson } from '@fortawesome/free-solid-svg-icons';
+import { faClock } from '@fortawesome/free-solid-svg-icons';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
@@ -25,6 +30,17 @@ const TinderPage = () => {
   const position = useRef(new Animated.ValueXY()).current;
   const splashPosition = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [showDetail, setShowDetail] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current; // Initial opacity of 0
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: showDetail ? 1 : 0, // Fade to 1 if visible, otherwise fade to 0
+      duration: 500, // Duration of the fade effect
+      useNativeDriver: true, // Use native driver for better performance
+    }).start();
+  }, [showDetail, fadeAnim]);
 
   const rotate = position.x.interpolate({
     inputRange: [-SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2],
@@ -57,7 +73,7 @@ const TinderPage = () => {
             toValue: { x: SCREEN_WIDTH + 100, y: gestureState.dy },
             duration: 100,
             easing: Easing.linear,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }).start(() => {
             handleSwipe();
           });
@@ -66,16 +82,18 @@ const TinderPage = () => {
             toValue: { x: -SCREEN_WIDTH - 100, y: gestureState.dy },
             duration: 100,
             easing: Easing.linear,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }).start(() => {
             handleSwipe();
           });
+        } else if (Math.abs(gestureState.dx) < 5 && Math.abs(gestureState.dy) < 5) {
+            handleTap();
         } else {
           Animated.timing(position, {
             toValue: { x: 0, y: 0 },
             duration: 300,
             easing: Easing.linear,
-            useNativeDriver: false,
+            useNativeDriver: true,
           }).start();
         }
       },
@@ -105,6 +123,10 @@ const TinderPage = () => {
       setCurrentIndex((prev) => (prev + 1) % data.length);
       position.setValue({ x: 0, y: 0 });
     }, 500);
+  };
+
+  const handleTap = () => {
+    setShowDetail((prevShowDetail) => !prevShowDetail);
   };
 
   const handleUndo = () => {
@@ -180,7 +202,33 @@ const TinderPage = () => {
                   {...panResponder.panHandlers}
                   style={animatedCardStyle}
                 >
+                  
                   <ImageStyled source={item.uri} />
+                <Animated.View style={{ opacity: fadeAnim }}>
+                    <JournalCover>
+              <JournalItem>
+          <FontAwesomeIcon icon={faBook} size={15} style={{ marginRight: 16 }} color={'#757575'} />
+          <JournalText>Thoughts</JournalText>
+              </JournalItem>
+              <JournalItem>
+          <FontAwesomeIcon icon={faPencil} size={15} style={{ marginRight: 16 }} color={'#757575'} />
+          <JournalText>Favorite lyric</JournalText>
+              </JournalItem>
+              <JournalItem>
+          <FontAwesomeIcon icon={faCalendar} size={15} style={{ marginRight: 16 }} color={'#757575'} />
+          <JournalText>Date</JournalText>
+              </JournalItem>
+              <JournalItem>
+          <FontAwesomeIcon icon={faClock} size={15} style={{ marginRight: 16 }} color={'#757575'} />
+          <JournalText>Memories</JournalText>
+              </JournalItem>
+              <JournalItem>
+          <FontAwesomeIcon icon={faPerson} size={15} style={{ marginRight: 16 }} color={'#757575'} />
+          <JournalText>People</JournalText>
+              </JournalItem>
+
+                    </JournalCover>
+                  </Animated.View>
                 </LargeCard>
               );
             } else {
@@ -192,8 +240,6 @@ const TinderPage = () => {
         <SmallCardContainer>
           <SmallCard source={require('../assets/yeLive.webp')} />
         </SmallCardContainer>
-
-
 
         <LatoTitle style={{ paddingTop: 35 }}>Everything I Am</LatoTitle>
         <LatoTitle style={{ fontSize: 15, paddingTop: 0 }}>Kanye West</LatoTitle>
@@ -299,4 +345,30 @@ const PlaceholderIcon = styled.View`
   height: 24px;
   border-radius: 12px;
   background-color: #00000050;
+`;
+
+const JournalCover = styled.View`
+  position: absolute; 
+  top: -${SCREEN_HEIGHT/2 - 50}px; 
+  left: 0px; 
+  z-index: 100;
+  width: 100%;
+  aspect-ratio: 1;
+  background-color: #f9f9f9;
+  padding: 20px;
+`
+
+const JournalItem = styled.View`
+  flex-direction: row;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom-width: 1px;
+  border-bottom-color: #e0e0e0;
+  padding-left: 8px;
+`;
+
+const JournalText = styled.Text`
+  font-family: 'Lato';
+  font-size: 16px;
+  color: gray;
 `;

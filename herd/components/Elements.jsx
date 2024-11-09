@@ -7,6 +7,18 @@ export const Container = styled.View`
     background-color: #f0f0f0;
 `;
 
+export const MerriweatherText = styled.Text`
+    font-family: 'Merriweather';
+    font-size: 20px;  
+    color: ${colors.black};
+    `
+
+export const LatoText = styled.Text`
+    font-family: 'Lato';
+    font-size: 20px;  
+    color: ${colors.black};
+    font-weight: 500;
+    `
 export const LargeText = styled.Text`
     font-size: 30px;
     padding: 10px 0;
