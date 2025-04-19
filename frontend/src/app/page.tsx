@@ -9,6 +9,45 @@ import { X, HelpCircle, Info } from "lucide-react";
 
 export default function Home() {
   const [showWelcome, setShowWelcome] = useState(true);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setSelectedFile(event.target.files[0]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!selectedFile) {
+      alert("Please select a PDF file");
+      return;
+    }
+
+    setIsProcessing(true);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const response = await fetch("http://localhost:5001/api/parse-invoice", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("Parsing result:", result);
+      // You can handle the result here (e.g., display it on the page)
+    } catch (error) {
+      console.error("Error processing invoice:", error);
+      alert("Error processing invoice. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
     <div className="container mx-auto p-6 bg-gradient-to-b from-background to-muted/20 min-h-screen">
@@ -116,6 +155,7 @@ export default function Home() {
                     id="invoice"
                     type="file"
                     accept=".pdf"
+                    onChange={handleFileChange}
                     className="cursor-pointer file:text-muted-foreground hover:border-blue-500/50 transition-colors"
                   />
                 </div>
@@ -135,7 +175,13 @@ export default function Home() {
                     className="h-10 px-3 py-2 text-sm hover:border-blue-500/50 transition-colors"
                   />
                 </div>
-                <Button className="w-full bg-blue-600 hover:bg-blue-700">Upload and Process</Button>
+                <Button 
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={handleSubmit}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? "Processing..." : "Upload and Process"}
+                </Button>
               </div>
             </CardContent>
           </Card>
