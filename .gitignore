@@ -37,4 +37,30 @@ coverage.xml
 .env.*.local
 
 # Logs
-*.log 
+*.log
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+.nuxt/
+.cache/
+.vercel/
+.turbo/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Local Netlify folder
+.netlify
+
+# Temporary files
+*.tmp
+*.temp
+temp_* 
