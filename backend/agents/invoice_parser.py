@@ -20,19 +20,22 @@ class InvoiceParser:
         You are an expert at understanding invoices. You will be given raw OCR or extracted text from a vendor invoice.
         Your job is to extract and return structured data including:
         - Vendor Name (the company selling the goods/services)
-        - Line items with: Product Description, Quantity, Unit Price, Total Price
+        - Country of Origin (where the goods are manufactured or produced)
+        - Line items with: Product Description, Quantity, Unit Price, Total Price, Country of Origin
         - Total Amount
 
         Return your output as a structured JSON object in this format:
 
         {
           "vendor_name": "...",
+          "country_of_origin": "...",
           "line_items": [
             {
               "product": "...",
               "quantity": ...,
               "unit_price": ...,
-              "total_price": ...
+              "total_price": ...,
+              "country_of_origin": "..."
             },
             ...
           ],
@@ -85,6 +88,7 @@ class InvoiceParser:
             # Return a minimal valid result
             return {
                 "vendor_name": "Unknown",
+                "country_of_origin": "Unknown",
                 "line_items": [],
                 "total_amount": 0.0
             }
@@ -100,44 +104,52 @@ class InvoiceParser:
             dict: Structured invoice data or None if parsing fails
         """
         try:
-            # Use Llama to understand and extract information from the invoice
-            user_prompt = f"""
-            Please analyze this invoice and extract the vendor name and line items.
-            For each line item, identify the product name, quantity, unit price, and total price.
+            # Prepare the prompt
+            prompt = f"""
+            {self.system_prompt}
             
-            Invoice text:
+            Here is the invoice text:
+            
             {text}
             
-            Return only a valid JSON object with the extracted information.
+            Extract the information and return it as a JSON object.
             """
             
-            # Call Llama with the system prompt and user prompt
-            logging.info("Calling Llama for invoice understanding")
-            response = self.llama.chat(
-                system_prompt=self.system_prompt,
-                user_prompt=user_prompt,
-                temperature=0.1  # Low temperature for more deterministic results
-            )
-            
-            # Extract the JSON from the response
-            response_text = response.text
-            logging.info(f"Llama response: {response_text}")
-            
-            # Try to find JSON in the response
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                json_str = json_match.group(0)
-                try:
-                    result = json.loads(json_str)
-                    logging.info(f"Successfully parsed JSON: {result}")
-                    return result
-                except json.JSONDecodeError as e:
-                    logging.error(f"Failed to parse JSON: {str(e)}")
-                    return None
-            else:
-                logging.warning("No JSON found in Llama response")
-                return None
+            # Call Llama for parsing
+            try:
+                # Try to use the chat method if available
+                if hasattr(self.llama, 'chat'):
+                    response = self.llama.chat(prompt)
+                else:
+                    # Fall back to a simpler method if chat is not available
+                    logging.warning("LlamaStackClient does not have a chat method, using fallback parsing")
+                    return self._parse_with_patterns(text)
                 
+                # Extract the JSON from the response
+                if response and "content" in response:
+                    content = response["content"]
+                    
+                    # Try to find JSON in the response
+                    json_match = re.search(r'```json\s*(.*?)\s*```', content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1)
+                    else:
+                        # Try to find any JSON-like structure
+                        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                        if json_match:
+                            json_str = json_match.group(0)
+                        else:
+                            return None
+                    
+                    # Parse the JSON
+                    result = json.loads(json_str)
+                    return result
+            except Exception as e:
+                logging.error(f"Error calling Llama: {str(e)}", exc_info=True)
+                return None
+            
+            return None
+            
         except Exception as e:
             logging.error(f"Error parsing with Llama: {str(e)}", exc_info=True)
             return None
@@ -152,40 +164,30 @@ class InvoiceParser:
         Returns:
             dict: Structured invoice data
         """
-        logging.info("Using pattern matching for parsing")
-        
-        # Initialize response structure
-        response = {
-            "vendor_name": "",
-            "line_items": [],
-            "total_amount": 0.0
-        }
+        # Split text into lines
+        lines = text.split('\n')
         
         # Extract vendor name
-        lines = text.split('\n')
-        logging.info(f"Split text into {len(lines)} lines")
-        
-        # Look for vendor name in various formats
         vendor_name = self._extract_vendor_name(lines)
-        response["vendor_name"] = vendor_name
+        
+        # Extract country of origin
+        country_of_origin = self._extract_country_of_origin(lines)
         
         # Extract line items
         line_items = self._extract_line_items(lines)
-        response["line_items"] = line_items
         
         # Extract total amount
         total_amount = self._extract_total_amount(lines)
-        response["total_amount"] = total_amount
         
-        # Log the response for debugging
-        logging.info("=== Pattern Matching Results ===")
-        logging.info(f"Vendor: {response['vendor_name']}")
-        logging.info(f"Number of line items: {len(response['line_items'])}")
-        logging.info(f"Line items: {response['line_items']}")
-        logging.info(f"Total amount: {response['total_amount']}")
-        logging.info("=====================")
+        # Construct result
+        result = {
+            "vendor_name": vendor_name,
+            "country_of_origin": country_of_origin,
+            "line_items": line_items,
+            "total_amount": total_amount
+        }
         
-        return response
+        return result
     
     def _extract_vendor_name(self, lines):
         """
@@ -195,70 +197,73 @@ class InvoiceParser:
             lines (list): List of invoice lines
             
         Returns:
-            str: Extracted vendor name
+            str: Vendor name or "Unknown"
         """
-        # Common vendor name indicators
-        vendor_indicators = [
-            "Billed To:", "From:", "Bill To:", "Sold By:", "Vendor:",
-            "Supplier:", "Merchant:", "Company:", "Business:",
-            "Invoice from"  # Added this for our test PDFs
+        # Common patterns for vendor name
+        patterns = [
+            r'vendor\s*:?\s*([^\n]+)',
+            r'supplier\s*:?\s*([^\n]+)',
+            r'from\s*:?\s*([^\n]+)',
+            r'bill\s*to\s*:?\s*([^\n]+)',
+            r'sold\s*by\s*:?\s*([^\n]+)',
+            r'company\s*:?\s*([^\n]+)',
+            r'business\s*:?\s*([^\n]+)'
         ]
         
-        # Company name suffixes
-        company_suffixes = [
-            "LLC", "Inc", "Corp", "Corporation", "Ltd", "Limited",
-            "Company", "Co", "Group", "Enterprises", "Solutions",
-            "Services", "Systems", "Technologies", "International",
-            "Hospital", "University"  # Added these for our test PDFs
+        # Check each line against patterns
+        for line in lines:
+            for pattern in patterns:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    return match.group(1).strip()
+        
+        # If no match found, return the first non-empty line
+        for line in lines:
+            if line.strip():
+                return line.strip()
+        
+        return "Unknown"
+    
+    def _extract_country_of_origin(self, lines):
+        """
+        Extract country of origin from invoice lines.
+        
+        Args:
+            lines (list): List of invoice lines
+            
+        Returns:
+            str: Country of origin or "Unknown"
+        """
+        # Common patterns for country of origin
+        patterns = [
+            r'country\s*of\s*origin\s*:?\s*([^\n]+)',
+            r'origin\s*:?\s*([^\n]+)',
+            r'made\s*in\s*:?\s*([^\n]+)',
+            r'manufactured\s*in\s*:?\s*([^\n]+)',
+            r'produced\s*in\s*:?\s*([^\n]+)'
         ]
         
-        # First pass: Look for explicit vendor indicators
-        for line in lines:
-            for indicator in vendor_indicators:
-                if indicator in line:
-                    # Extract vendor name after the indicator
-                    vendor_name = line.split(indicator, 1)[1].strip()
-                    # Remove any trailing punctuation
-                    vendor_name = re.sub(r'[.,;:]$', '', vendor_name)
-                    if vendor_name:
-                        logging.info(f"Found vendor name using indicator '{indicator}': {vendor_name}")
-                        return vendor_name
+        # List of common countries
+        countries = [
+            "China", "Mexico", "Canada", "Japan", "Germany", "United States", 
+            "USA", "UK", "United Kingdom", "France", "Italy", "Spain", 
+            "Brazil", "India", "South Korea", "Taiwan", "Vietnam", "Thailand",
+            "Malaysia", "Indonesia", "Philippines", "Singapore", "Hong Kong"
+        ]
         
-        # Second pass: Look for company name patterns
+        # Check each line against patterns
         for line in lines:
-            # Skip lines that are too short or contain common non-vendor words
-            if len(line) < 3 or any(word in line.lower() for word in ["invoice", "date", "page", "total"]):
-                continue
+            for pattern in patterns:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    return match.group(1).strip()
             
-            # Look for company name with suffix
-            for suffix in company_suffixes:
-                if suffix in line:
-                    # Extract the company name
-                    parts = line.split()
-                    for i, part in enumerate(parts):
-                        if suffix in part:
-                            company_name = " ".join(parts[:i+1])
-                            # Remove any trailing punctuation
-                            company_name = re.sub(r'[.,;:]$', '', company_name)
-                            logging.info(f"Found vendor name using suffix '{suffix}': {company_name}")
-                            return company_name
+            # Check for country names in the line
+            for country in countries:
+                if re.search(r'\b' + re.escape(country) + r'\b', line, re.IGNORECASE):
+                    return country
         
-        # Third pass: Look for lines that might contain a company name
-        for line in lines:
-            # Skip lines that are too short or contain common non-vendor words
-            if len(line) < 3 or any(word in line.lower() for word in ["invoice", "date", "page", "total"]):
-                continue
-            
-            # Look for lines with proper capitalization (likely company names)
-            words = line.split()
-            if len(words) >= 2 and all(word[0].isupper() for word in words if word):
-                # Remove any trailing punctuation
-                company_name = re.sub(r'[.,;:]$', '', line)
-                logging.info(f"Found vendor name using capitalization: {company_name}")
-                return company_name
-        
-        logging.warning("No vendor name found in the invoice")
-        return "Unknown Vendor"
+        return "Unknown"
     
     def _extract_line_items(self, lines):
         """
@@ -268,137 +273,148 @@ class InvoiceParser:
             lines (list): List of invoice lines
             
         Returns:
-            list: List of extracted line items
+            list: List of line items
         """
         line_items = []
-        in_line_items_section = False
-        seen_items = set()  # Track seen items to prevent duplication
+        current_item = None
         
-        # Common line item headers
-        item_headers = [
-            ("Item", "Quantity", "Price"),
-            ("Description", "Quantity", "Price"),
-            ("Product", "Quantity", "Price"),
-            ("Service", "Quantity", "Price"),
-            ("Qty", "Price", "Amount"),
-            ("Quantity", "Unit Price", "Total")
-        ]
+        # Find the Items section
+        items_started = False
         
-        # Find the line items section
-        for i, line in enumerate(lines):
-            # Check for line item headers
-            if any(all(header in line for header in headers) for headers in item_headers):
-                in_line_items_section = True
-                logging.info(f"Found line items header at line {i+1}: {line}")
+        for line in lines:
+            line = line.strip()
+            if not line:
                 continue
             
-            if in_line_items_section:
-                # Skip empty lines
-                if not line.strip():
-                    continue
-                
-                # Skip lines that look like headers or totals
-                if any(term in line.lower() for term in ["total amount", "payment terms", "page", "subtotal", "tax"]):
-                    in_line_items_section = False
-                    logging.info(f"End of line items section at line {i+1}: {line}")
-                    continue
-                
-                # Try to extract line item details
-                line_item = self._parse_line_item(line)
-                if line_item:
-                    # Create a unique key for the line item
-                    item_key = f"{line_item['product']}_{line_item['quantity']}_{line_item['unit_price']}"
-                    if item_key not in seen_items:
-                        seen_items.add(item_key)
-                        line_items.append(line_item)
-                        logging.info(f"Found line item: {line_item}")
-        
-        # If no line items found, try a more aggressive approach
-        if not line_items:
-            logging.info("No line items found with standard approach, trying aggressive parsing")
+            # Check if we've reached the Items section
+            if line.lower().startswith('items:'):
+                items_started = True
+                continue
             
-            for line in lines:
-                # Skip empty lines and headers
-                if not line.strip() or any(term in line.lower() for term in ["total", "amount", "invoice", "date"]):
-                    continue
+            if not items_started:
+                continue
+            
+            # Check if this is a new item (starts with a number)
+            if re.match(r'^\d+\.', line):
+                # Save the previous item if it exists
+                if current_item is not None:
+                    line_items.append(current_item)
                 
-                # Look for lines with numbers that might be line items
-                line_item = self._parse_line_item_aggressive(line)
-                if line_item:
-                    # Create a unique key for the line item
-                    item_key = f"{line_item['product']}_{line_item['quantity']}_{line_item['unit_price']}"
-                    if item_key not in seen_items:
-                        seen_items.add(item_key)
-                        line_items.append(line_item)
-                        logging.info(f"Found line item (aggressive): {line_item}")
+                # Start a new item
+                current_item = {
+                    'product': line.split('.', 1)[1].strip(),
+                    'quantity': 0,
+                    'unit_price': 0.0,
+                    'total_price': 0.0
+                }
+                continue
+            
+            # Skip if we haven't started an item yet
+            if current_item is None:
+                continue
+            
+            # Extract HTS code
+            hts_match = re.search(r'hts\s*code\s*:?\s*([0-9\.]+)', line, re.IGNORECASE)
+            if hts_match:
+                current_item['hts_code'] = hts_match.group(1)
+                continue
+            
+            # Extract quantity
+            qty_match = re.search(r'quantity\s*:?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+            if qty_match:
+                current_item['quantity'] = float(qty_match.group(1))
+                continue
+            
+            # Extract unit price
+            price_match = re.search(r'unit\s*price\s*:?\s*\$?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+            if price_match:
+                current_item['unit_price'] = float(price_match.group(1))
+                continue
+            
+            # Extract total price
+            total_match = re.search(r'total\s*:?\s*\$?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+            if total_match:
+                current_item['total_price'] = float(total_match.group(1))
+                continue
+        
+        # Add the last item if it exists
+        if current_item is not None:
+            line_items.append(current_item)
         
         return line_items
     
     def _parse_line_item(self, line):
         """
-        Parse a single line into a line item.
+        Parse a single line item.
         
         Args:
-            line (str): Line of text
+            line (str): Line item text
             
         Returns:
-            dict: Line item or None if parsing fails
+            dict: Parsed line item or None
         """
-        # Look for patterns like "Product (details) quantity price total"
-        # or "Product quantity price total"
-        parts = re.findall(r'[\d,.]+', line)
-        if len(parts) >= 3:
-            # Get the product name (everything before the first number)
-            product = line.split(parts[0])[0].strip()
-            if product:  # Only add if we found a product name
-                try:
-                    quantity = int(parts[0].replace(',', ''))
-                    unit_price = float(parts[1].replace(',', ''))
-                    total_price = float(parts[2].replace(',', ''))
-                    
-                    return {
-                        "product": product,
-                        "quantity": quantity,
-                        "unit_price": unit_price,
-                        "total_price": total_price
-                    }
-                except (ValueError, IndexError):
-                    logging.warning(f"Failed to parse numbers in line: {line}")
+        # Try to extract product, quantity, unit price, and total price
+        # This is a simplified approach and may need refinement
+        
+        # Look for patterns like "Product: X, Quantity: Y, Price: Z, Total: W"
+        product_match = re.search(r'product\s*:?\s*([^,]+)', line, re.IGNORECASE)
+        quantity_match = re.search(r'quantity\s*:?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+        price_match = re.search(r'price\s*:?\s*\$?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+        total_match = re.search(r'total\s*:?\s*\$?\s*(\d+(?:\.\d+)?)', line, re.IGNORECASE)
+        
+        if product_match:
+            product = product_match.group(1).strip()
+            quantity = float(quantity_match.group(1)) if quantity_match else 1.0
+            unit_price = float(price_match.group(1)) if price_match else 0.0
+            total_price = float(total_match.group(1)) if total_match else quantity * unit_price
+            
+            # Try to extract country of origin for this item
+            country_of_origin = self._extract_country_of_origin([line])
+            
+            return {
+                "product": product,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_price": total_price,
+                "country_of_origin": country_of_origin
+            }
+        
         return None
     
     def _parse_line_item_aggressive(self, line):
         """
-        Parse a line item using a more aggressive approach.
+        More aggressive parsing of a line item.
         
         Args:
-            line (str): Line of text
+            line (str): Line item text
             
         Returns:
-            dict: Line item or None if parsing fails
+            dict: Parsed line item or None
         """
-        # Look for lines with at least 2 numbers (quantity and price)
-        parts = re.findall(r'[\d,.]+', line)
-        if len(parts) >= 2:
-            # Try to extract product name and numbers
-            product = line
-            for part in parts:
-                product = product.replace(part, "")
-            product = product.strip()
+        # Try to extract numbers that might be quantities and prices
+        numbers = re.findall(r'\$?\s*(\d+(?:\.\d+)?)', line)
+        
+        if len(numbers) >= 2:
+            # Assume the first number is quantity and the second is price
+            quantity = float(numbers[0])
+            unit_price = float(numbers[1])
+            total_price = quantity * unit_price
             
-            if product and len(product) > 2:  # Ensure product name is meaningful
-                try:
-                    quantity = int(parts[0].replace(',', ''))
-                    unit_price = float(parts[1].replace(',', ''))
-                    total_price = quantity * unit_price  # Estimate total
-                    
-                    return {
-                        "product": product,
-                        "quantity": quantity,
-                        "unit_price": unit_price,
-                        "total_price": total_price
-                    }
-                except (ValueError, IndexError):
-                    logging.warning(f"Failed to parse numbers in line: {line}")
+            # Extract product name (everything before the first number)
+            product_match = re.match(r'^([^0-9$]+)', line)
+            product = product_match.group(1).strip() if product_match else "Unknown Product"
+            
+            # Try to extract country of origin for this item
+            country_of_origin = self._extract_country_of_origin([line])
+            
+            return {
+                "product": product,
+                "quantity": quantity,
+                "unit_price": unit_price,
+                "total_price": total_price,
+                "country_of_origin": country_of_origin
+            }
+        
         return None
     
     def _extract_total_amount(self, lines):
@@ -409,34 +425,24 @@ class InvoiceParser:
             lines (list): List of invoice lines
             
         Returns:
-            float: Total amount
+            float: Total amount or 0.0
         """
-        # Common total amount indicators
-        total_indicators = [
-            "Total Amount:", "Total:", "Amount Due:", "Balance Due:",
-            "Grand Total:", "Invoice Total:", "Total Invoice:"
+        # Common patterns for total amount
+        patterns = [
+            r'total\s*amount\s*:?\s*\$?\s*(\d+(?:\.\d+)?)',
+            r'total\s*:?\s*\$?\s*(\d+(?:\.\d+)?)',
+            r'amount\s*due\s*:?\s*\$?\s*(\d+(?:\.\d+)?)',
+            r'balance\s*due\s*:?\s*\$?\s*(\d+(?:\.\d+)?)',
+            r'grand\s*total\s*:?\s*\$?\s*(\d+(?:\.\d+)?)'
         ]
         
+        # Check each line against patterns
         for line in lines:
-            for indicator in total_indicators:
-                if indicator in line:
-                    # Extract the amount after the indicator
-                    amount_str = line.split(indicator, 1)[1].strip()
-                    # Remove currency symbols and whitespace
-                    amount_str = re.sub(r'[^\d.,]', '', amount_str)
-                    try:
-                        # Handle different number formats
-                        amount_str = amount_str.replace(',', '')
-                        if '.' in amount_str:
-                            amount = float(amount_str)
-                        else:
-                            amount = float(amount_str) / 100  # Assume cents if no decimal
-                        logging.info(f"Found total amount: {amount}")
-                        return amount
-                    except (ValueError, IndexError):
-                        logging.warning(f"Failed to parse total amount from: {line}")
+            for pattern in patterns:
+                match = re.search(pattern, line, re.IGNORECASE)
+                if match:
+                    return float(match.group(1))
         
-        # If no total found, calculate from line items
         return 0.0
     
     def _is_valid_result(self, result):
@@ -447,61 +453,63 @@ class InvoiceParser:
             result (dict): Parsing result
             
         Returns:
-            bool: True if the result is valid, False otherwise
+            bool: True if valid, False otherwise
         """
-        if not result:
+        if not isinstance(result, dict):
             return False
         
-        # Check if vendor name is present
-        if not result.get("vendor_name"):
+        # Check required fields
+        required_fields = ["vendor_name", "line_items"]
+        for field in required_fields:
+            if field not in result:
+                return False
+        
+        # Check line items
+        if not isinstance(result["line_items"], list):
             return False
         
-        # Check if line items are present
-        if not result.get("line_items") or not isinstance(result["line_items"], list):
-            return False
+        # If we have line items, check their structure
+        if result["line_items"]:
+            item = result["line_items"][0]
+            if not isinstance(item, dict):
+                return False
+            
+            # Check required fields in line items
+            required_item_fields = ["product", "quantity", "unit_price", "total_price"]
+            for field in required_item_fields:
+                if field not in item:
+                    return False
         
-        # Check if at least one line item has the required fields
-        for item in result["line_items"]:
-            if all(key in item for key in ["product", "quantity", "unit_price", "total_price"]):
-                return True
-        
-        return False
+        return True
     
     def _extract_text_with_ocr(self, pdf_path):
         """
         Extract text from PDF using OCR.
         
         Args:
-            pdf_path (str): Path to the PDF file
+            pdf_path (str): Path to PDF file
             
         Returns:
-            str: Extracted text from the PDF
+            str: Extracted text
         """
         try:
-            logging.info(f"Extracting text with OCR from {pdf_path}")
-            
             # Convert PDF to images
             images = pdf2image.convert_from_path(pdf_path)
-            logging.info(f"Converted PDF to {len(images)} images")
             
             # Extract text from each image
             text = ""
             for i, image in enumerate(images):
                 # Save image to temporary file
                 with tempfile.NamedTemporaryFile(suffix='.png', delete=False) as temp_file:
-                    temp_path = temp_file.name
-                    image.save(temp_path)
+                    image.save(temp_file.name)
                 
-                # Extract text from image
-                page_text = pytesseract.image_to_string(Image.open(temp_path))
-                text += page_text + "\n"
+                # Extract text using Tesseract
+                page_text = pytesseract.image_to_string(Image.open(temp_file.name))
+                text += page_text + "\n\n"
                 
                 # Clean up temporary file
-                os.unlink(temp_path)
-                
-                logging.info(f"Extracted {len(page_text)} characters from page {i+1}")
+                os.unlink(temp_file.name)
             
-            logging.info(f"Total OCR text length: {len(text)} characters")
             return text
             
         except Exception as e:
