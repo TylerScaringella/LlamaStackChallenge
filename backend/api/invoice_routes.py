@@ -40,9 +40,10 @@ def parse_invoice():
         # Parse the invoice and analyze tariffs
         integration = TariffInvoiceIntegration(invoiceOutput=text, use_mock_data=False)
         result = integration.process_invoice_text()
-        # print("RESULT FROM ALL OF THE ANALYSIS", result)
+        print("RESULT FROM ALL OF THE ANALYSIS", result['invoice_data'])
         
-        return jsonify({"status": "success"})
+
+        return jsonify({"analysis": result['tariff_analysis'], "items": result['invoice_data']})
         # return jsonify(result)
     except Exception as e:
         logger.error(f"Error processing invoice: {str(e)}", exc_info=True)

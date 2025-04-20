@@ -167,59 +167,9 @@ class TariffInvoiceIntegration:
             item_analysis = self.tariff_agent.analyze_tariffs(hts_code, country_of_origin)
             analysis.append(item_analysis)
             
-            # Get the current rate from USITC data
-            usitc_data = item_analysis.get('usitc_data', {})
-            current_rate_str = usitc_data.get('current_rate', '0')
-            
-            # Handle 'N/A' or other non-numeric values
-            try:
-                current_rate = float(current_rate_str.rstrip('%') if current_rate_str != 'N/A' else '0')
-            except (ValueError, AttributeError):
-                logger.warning(f"Invalid current rate value: {current_rate_str}, using 0")
-                current_rate = 0
-            
-            # Calculate tariff cost
-            tariff_cost = total_price * (current_rate / 100)
-            
-            # Add to results
-            item_result = {
-                'item': item,
-                'tariff_analysis': item_analysis,
-                'tariff_cost': tariff_cost,
-                'summary': {
-                    'product': item.get('product'),
-                    'hts_code': hts_code,
-                    'quantity': quantity,
-                    'unit_price': unit_price,
-                    'total_price': total_price,
-                    'current_rate': f"{current_rate}%",
-                    'tariff_cost': tariff_cost,
-                    'hts_code_found': hts_code != "0000.00.0000"  # Flag to indicate if a real HTS code was found
-                }
-            }
-            
-            tariff_analysis['items'].append(item_result)
-            tariff_analysis['total_tariff_cost'] += tariff_cost
         
-        # Add summary
-        tariff_analysis['summary'] = {
-            'total_items': len(tariff_analysis['items']),
-            'total_tariff_cost': tariff_analysis['total_tariff_cost'],
-            'country_of_origin': country_of_origin,
-            'analysis_date': datetime.now().isoformat(),
-            'items_analyzed': [
-                {
-                    'product': item['summary']['product'],
-                    'hts_code': item['summary']['hts_code'],
-                    'tariff_rate': item['summary']['current_rate'],
-                    'tariff_cost': item['summary']['tariff_cost'],
-                    'hts_code_found': item['summary']['hts_code_found']
-                }
-                for item in tariff_analysis['items']
-            ]
-        }
-        
-        return tariff_analysis
+        # print('THE LENGTH OF THE ANALYSIS IS: ', len(analysis))
+        return analysis
     
     def _extract_line_items_with_llama(self, text):
         """
