@@ -8,7 +8,7 @@ from backend.tools.pdf_extractor import extract_text_from_pdf
 from datetime import datetime
 
 # Configure logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Load environment variables
@@ -29,7 +29,6 @@ class TariffInvoiceIntegration:
         """
         self.invoice_parser = InvoiceParser()
         self.tariff_agent = TariffMonitoringAgent(use_mock_data=use_mock_data)
-        logger.info("Initialized TariffInvoiceIntegration")
         
     def process_invoice_pdf(self, pdf_path):
         """
@@ -41,15 +40,12 @@ class TariffInvoiceIntegration:
         Returns:
             dict: Combined invoice and tariff analysis results
         """
-        logger.info(f"Processing PDF invoice: {pdf_path}")
-        
         # Extract text from PDF
         with open(pdf_path, 'rb') as pdf_file:
             text = extract_text_from_pdf(pdf_file)
         
         # Parse the invoice
         invoice_data = self.invoice_parser.parse_invoice(text, pdf_path=pdf_path)
-        logger.debug(f"Parsed invoice data: {invoice_data}")
         
         # Analyze tariffs for each item
         tariff_analysis = self.analyze_invoice_tariffs(invoice_data)
@@ -60,7 +56,6 @@ class TariffInvoiceIntegration:
             'tariff_analysis': tariff_analysis
         }
         
-        logger.info("Completed invoice processing and tariff analysis")
         return result
     
     def process_invoice_text(self, text):
@@ -73,11 +68,8 @@ class TariffInvoiceIntegration:
         Returns:
             dict: Combined invoice and tariff analysis results
         """
-        logger.info("Processing invoice text")
-        
         # Parse the invoice
         invoice_data = self.invoice_parser.parse_invoice(text)
-        logger.debug(f"Parsed invoice data: {invoice_data}")
         
         # Analyze tariffs for each item
         tariff_analysis = self.analyze_invoice_tariffs(invoice_data)
@@ -88,7 +80,6 @@ class TariffInvoiceIntegration:
             'tariff_analysis': tariff_analysis
         }
         
-        logger.info("Completed invoice processing and tariff analysis")
         return result
     
     def analyze_invoice_tariffs(self, invoice_data):
@@ -101,8 +92,6 @@ class TariffInvoiceIntegration:
         Returns:
             dict: Tariff analysis results
         """
-        logger.info("Analyzing tariffs for invoice items")
-        
         tariff_analysis = {
             'items': [],
             'total_tariff_cost': 0.0,
@@ -111,7 +100,6 @@ class TariffInvoiceIntegration:
         
         # Get country of origin from invoice
         country_of_origin = invoice_data.get('country_of_origin', 'Unknown')
-        logger.debug(f"Country of origin: {country_of_origin}")
         
         # Analyze each item
         for item in invoice_data.get('line_items', []):
@@ -177,7 +165,6 @@ class TariffInvoiceIntegration:
             ]
         }
         
-        logger.info(f"Completed tariff analysis for {len(tariff_analysis['items'])} items")
         return tariff_analysis
 
 # Example usage
